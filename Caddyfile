@@ -1,0 +1,12 @@
+# Caddyfile — automatic HTTPS reverse proxy for the Logos dashboard
+#
+# {$DOMAIN} is read from the DOMAIN environment variable.
+# Set DOMAIN=node.example.com in your .env (or shell) before starting Caddy.
+# If DOMAIN is not set, Caddy falls back to "localhost" (HTTP only).
+#
+# Caddy automatically obtains and renews a Let's Encrypt certificate.
+# Ports 80 and 443 must be reachable from the internet for ACME to work.
+
+{$DOMAIN:localhost} {
+    reverse_proxy logos-node:3001
+}

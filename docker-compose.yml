@@ -1,0 +1,38 @@
+services:
+  logos-node:
+    build:
+      context: .
+      args:
+        NODE_VERSION: "0.2.1"
+        CIRCUITS_VERSION: "0.4.1"
+    volumes:
+      - logos-data:/data
+    ports:
+      - "3000:3000/udp"   # p2p (UDP/QUIC)
+      - "3001:3001/tcp"   # web dashboard
+      # port 8080 (node HTTP API) is intentionally NOT exposed — internal only
+    env_file: .env
+    restart: unless-stopped
+
+  # ── Optional: Caddy HTTPS reverse proxy ──────────────────────────────────────
+  # Uncomment to expose the dashboard over HTTPS with automatic TLS.
+  # Set DOMAIN in your .env (or export it) before starting.
+  # Requires ports 80 and 443 to be open on the host firewall.
+  #
+  # caddy:
+  #   image: caddy:2-alpine
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile:ro
+  #     - caddy-data:/data
+  #     - caddy-config:/config
+  #   depends_on:
+  #     - logos-node
+  #   restart: unless-stopped
+
+volumes:
+  logos-data:
+  # caddy-data:
+  # caddy-config:

@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logos Node Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --text:     #c9d1d9;
+      --muted:    #8b949e;
+      --accent:   #58a6ff;
+      --green:    #3fb950;
+      --yellow:   #d29922;
+      --red:      #f85149;
+      --radius:   8px;
+      --font:     'Segoe UI', system-ui, -apple-system, sans-serif;
+      --mono:     'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    header h1 .logo {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      display: inline-block;
+      background: url('/assets/logo.png') center/cover no-repeat;
+    }
+
+    #refresh-info {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    #refresh-info span {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* Single-column layout — stacks everything vertically */
+    main {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Top stats row — side by side on desktop, stacked on mobile */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-title .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    .dot.green  { background: var(--green); }
+    .dot.yellow { background: var(--yellow); }
+    .dot.red    { background: var(--red); }
+
+    /* Key-value rows */
+    .kv-table { width: 100%; border-collapse: collapse; }
+    .kv-table tr { border-bottom: 1px solid var(--border); }
+    .kv-table tr:last-child { border-bottom: none; }
+    .kv-table td { padding: 6px 0; vertical-align: top; }
+    .kv-table td:first-child {
+      color: var(--muted);
+      font-size: 12px;
+      width: 120px;
+      padding-right: 8px;
+      white-space: nowrap;
+    }
+    .kv-table td:last-child {
+      font-family: var(--mono);
+      font-size: 12px;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+    }
+
+    .value-highlight { color: var(--accent); font-weight: 600; }
+    .value-ok     { color: var(--green); }
+    .value-warn   { color: var(--yellow); }
+    .value-err    { color: var(--red); }
+
+    /* Wallet keys — monospace block instead of table */
+    .key-block {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+      line-height: 1.6;
+    }
+    .key-block .key-label {
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .key-block .key-label:not(:first-child) {
+      margin-top: 10px;
+    }
+    .key-block .key-value {
+      color: var(--accent);
+      display: block;
+    }
+
+    /* Log section */
+    .log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    #log-count {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    #log-box {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+      height: 400px;
+      overflow-y: scroll;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      color: #7ee787;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+    }
+
+    #log-box::-webkit-scrollbar { width: 6px; }
+    #log-box::-webkit-scrollbar-track { background: transparent; }
+    #log-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .log-line { display: block; }
+    .log-line.err { color: var(--red); }
+    .log-line.warn { color: var(--yellow); }
+
+    .error-banner {
+      background: rgba(248, 81, 73, 0.1);
+      border: 1px solid var(--red);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--red);
+      margin-bottom: 8px;
+      display: none;
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 10px 16px; }
+      main   { padding: 12px 8px; gap: 12px; }
+      .stats-row { grid-template-columns: 1fr; }
+      #log-box { height: 300px; }
+      .kv-table td:first-child { width: 90px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1><span class="logo"></span> Logos Node Dashboard</h1>
+    <div id="refresh-info">Refreshing in <span id="countdown">10</span>s</div>
+  </header>
+
+  <main>
+    <!-- Node Status + Peers — side by side -->
+    <div class="stats-row">
+      <div class="card" id="card-node">
+        <div class="card-title">
+          <span class="dot" id="node-dot"></span>
+          Node Status
+        </div>
+        <div id="node-error" class="error-banner"></div>
+        <table class="kv-table" id="node-table">
+          <tr><td>mode</td><td>—</td></tr>
+          <tr><td>slot</td><td>—</td></tr>
+          <tr><td>height</td><td>—</td></tr>
+          <tr><td>tip</td><td>—</td></tr>
+        </table>
+      </div>
+
+      <div class="card" id="card-peers">
+        <div class="card-title">
+          <span class="dot" id="peers-dot"></span>
+          Network / Peers
+        </div>
+        <div id="peers-error" class="error-banner"></div>
+        <table class="kv-table" id="peers-table">
+          <tr><td>peer count</td><td>—</td></tr>
+          <tr><td>connections</td><td>—</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- Wallet Keys — full width -->
+    <div class="card" id="card-keys">
+      <div class="card-title">
+        <span class="dot"></span>
+        Wallet Keys
+      </div>
+      <div class="key-block" id="keys-block">
+        <span style="color:var(--muted);font-size:12px">Loading…</span>
+      </div>
+    </div>
+
+    <!-- Logs — full width -->
+    <div class="card">
+      <div class="log-header">
+        <div class="card-title" style="margin-bottom:0">
+          <span class="dot"></span>
+          Node Logs
+        </div>
+        <div id="log-count"></div>
+      </div>
+      <div id="log-box"></div>
+    </div>
+  </main>
+
+  <script>
+    function setText(el, text, cls) {
+      el.textContent = text;
+      if (cls) el.className = cls;
+    }
+
+    function kvRow(label, value, valueCls) {
+      const tr = document.createElement('tr');
+      const td1 = document.createElement('td'); td1.textContent = label;
+      const td2 = document.createElement('td');
+      td2.textContent = value ?? '—';
+      if (valueCls) td2.className = valueCls;
+      tr.appendChild(td1); tr.appendChild(td2);
+      return tr;
+    }
+
+    function replaceTable(tableId, rows) {
+      const table = document.getElementById(tableId);
+      table.innerHTML = '';
+      rows.forEach(([label, value, cls]) => table.appendChild(kvRow(label, value, cls)));
+    }
+
+    function showError(bannerId, dotId, msg) {
+      const banner = document.getElementById(bannerId);
+      const dot    = document.getElementById(dotId);
+      banner.textContent = msg;
+      banner.style.display = 'block';
+      if (dot) { dot.className = 'dot red'; }
+    }
+
+    function clearError(bannerId, dotId, okClass) {
+      const banner = document.getElementById(bannerId);
+      const dot    = document.getElementById(dotId);
+      banner.style.display = 'none';
+      if (dot) { dot.className = 'dot ' + (okClass || 'green'); }
+    }
+
+    async function fetchJSON(url) {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      return resp.json();
+    }
+
+    async function updateStatus() {
+      try {
+        const data = await fetchJSON('/api/status');
+
+        if (data.cryptarchia) {
+          clearError('node-error', 'node-dot', 'green');
+          const c = data.cryptarchia;
+          replaceTable('node-table', [
+            ['mode',   c.status ?? c.mode ?? '—', 'value-highlight'],
+            ['slot',   c.slot   ?? c.current_slot ?? '—'],
+            ['height', c.height ?? c.block_number  ?? '—'],
+            ['tip',    c.tip    ?? c.head_block_hash ?? '—'],
+          ]);
+        } else {
+          const err = (data.errors && data.errors[0]) || 'Node API unavailable';
+          showError('node-error', 'node-dot', err);
+          replaceTable('node-table', [['mode','—'],['slot','—'],['height','—'],['tip','—']]);
+        }
+
+        if (data.network) {
+          clearError('peers-error', 'peers-dot', 'green');
+          const n = data.network;
+          const peerCount = n.connected_peers ?? n.peer_count ?? n.peers ?? '—';
+          const peerCls   = typeof peerCount === 'number'
+            ? (peerCount > 0 ? 'value-ok' : 'value-warn') : '';
+          replaceTable('peers-table', [
+            ['peer count',   peerCount,              peerCls],
+            ['connections',  n.connections ?? n.num_connections ?? '—'],
+          ]);
+        } else {
+          const err = (data.errors && data.errors[1]) || 'Network API unavailable';
+          showError('peers-error', 'peers-dot', err);
+          replaceTable('peers-table', [['peer count','—'],['connections','—']]);
+        }
+
+      } catch (err) {
+        showError('node-error',  'node-dot',  String(err));
+        showError('peers-error', 'peers-dot', '');
+      }
+    }
+
+    async function updateKeys() {
+      try {
+        const data = await fetchJSON('/api/keys');
+        const block = document.getElementById('keys-block');
+        const entries = Object.entries(data);
+        if (entries.length === 0) {
+          block.innerHTML = '<span style="color:var(--yellow);font-size:12px">No keys found</span>';
+          return;
+        }
+        block.innerHTML = '';
+        entries.forEach(([k, v]) => {
+          const label = document.createElement('span');
+          label.className = 'key-label';
+          label.textContent = k;
+          const value = document.createElement('span');
+          value.className = 'key-value';
+          value.textContent = v;
+          block.appendChild(label);
+          block.appendChild(value);
+        });
+      } catch (err) {
+        document.getElementById('keys-block').innerHTML =
+          `<span style="color:var(--red);font-size:12px">${err}</span>`;
+      }
+    }
+
+    async function updateLogs() {
+      try {
+        const data = await fetchJSON('/api/logs');
+        const box = document.getElementById('log-box');
+        const wasAtBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+
+        box.innerHTML = '';
+        data.lines.forEach(line => {
+          const span = document.createElement('span');
+          span.className = 'log-line' +
+            (/(error|panic|fatal)/i.test(line) ? ' err'  : '') +
+            (/(warn|warning)/i.test(line)       ? ' warn' : '');
+          span.textContent = line;
+          box.appendChild(span);
+          box.appendChild(document.createTextNode('\n'));
+        });
+
+        document.getElementById('log-count').textContent =
+          `${data.count} line${data.count !== 1 ? 's' : ''}`;
+
+        if (wasAtBottom) box.scrollTop = box.scrollHeight;
+      } catch (_) {}
+    }
+
+    let countdown = 10;
+
+    function tick() {
+      document.getElementById('countdown').textContent = countdown;
+      if (countdown <= 0) {
+        countdown = 10;
+        refresh();
+      } else {
+        countdown--;
+      }
+    }
+
+    function refresh() {
+      updateStatus();
+      updateLogs();
+      if (countdown === 10) updateKeys();
+    }
+
+    refresh();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>

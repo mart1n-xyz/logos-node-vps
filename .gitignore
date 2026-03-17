@@ -1,0 +1,24 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local env overrides
+.env
+.env.local
+*.env
+
+# Node / build artifacts (if any tooling is added later)
+node_modules/
+dist/
+
+# Downloaded binaries / archives (never commit these)
+*.tar.gz
+*.zip
+logos-blockchain-node
+logos-blockchain-circuits-*/
