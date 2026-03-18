@@ -541,9 +541,12 @@
 
     async function updateKeys() {
       try {
-        const data = await fetchJSON('/api/keys');
+        const [keys, balances] = await Promise.all([
+          fetchJSON('/api/keys'),
+          fetchJSON('/api/balances').catch(() => ({})),
+        ]);
         const block = document.getElementById('keys-block');
-        const entries = Object.entries(data);
+        const entries = Object.entries(keys);
         if (entries.length === 0) {
           block.innerHTML = '<span style="color:var(--yellow);font-size:12px">No keys found</span>';
           return;
@@ -553,11 +556,31 @@
           const label = document.createElement('span');
           label.className = 'key-label';
           label.textContent = k;
+          block.appendChild(label);
+
           const value = document.createElement('span');
           value.className = 'key-value';
           value.textContent = v;
-          block.appendChild(label);
           block.appendChild(value);
+
+          const bal = balances[k];
+          const balLine = document.createElement('span');
+          balLine.style.cssText = 'font-size:11px;display:block;margin-top:2px;';
+          if (!bal) {
+            balLine.style.color = 'var(--muted)';
+            balLine.textContent = 'Balance: —';
+          } else if (bal.duplicate_of) {
+            balLine.style.color = 'var(--muted)';
+            balLine.textContent = `Balance: same as ${bal.duplicate_of}`;
+          } else if (bal.error) {
+            balLine.style.color = 'var(--red)';
+            balLine.textContent = `Balance: unavailable`;
+          } else {
+            const amount = bal.balance ?? bal.amount ?? bal.value ?? JSON.stringify(bal);
+            balLine.style.color = 'var(--green)';
+            balLine.textContent = `Balance: ${amount}`;
+          }
+          block.appendChild(balLine);
         });
       } catch (err) {
         document.getElementById('keys-block').innerHTML =
