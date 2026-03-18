@@ -7,7 +7,7 @@ Run a [Logos Blockchain](https://github.com/logos-co/nomos-node) devnet node on 
 ## Quick start — one SSH command
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/main/setup.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/master/setup.sh | sudo bash
 ```
 
 This will:

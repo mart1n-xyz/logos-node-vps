@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup.sh — One-shot installer for Logos Blockchain Node on Ubuntu 24.04
+# setup.sh — One-shot installer for Logos Blockchain Node on Ubuntu 24.04 / Debian 12+
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/main/setup.sh | bash
@@ -31,14 +31,20 @@ install_docker() {
     apt-get install -y --no-install-recommends \
         ca-certificates curl gnupg lsb-release
 
+    # Detect distro (ubuntu or debian)
+    DISTRO=$(. /etc/os-release && echo "${ID}")
+    if [[ "$DISTRO" != "ubuntu" && "$DISTRO" != "debian" ]]; then
+        err "Unsupported distro: $DISTRO. Only Ubuntu and Debian are supported."
+    fi
+
     install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+    curl -fsSL "https://download.docker.com/linux/${DISTRO}/gpg" \
         | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     chmod a+r /etc/apt/keyrings/docker.gpg
 
     echo \
         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-https://download.docker.com/linux/ubuntu \
+https://download.docker.com/linux/${DISTRO} \
 $(lsb_release -cs) stable" \
         | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
