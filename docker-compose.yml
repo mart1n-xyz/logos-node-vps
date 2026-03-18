@@ -11,6 +11,8 @@ services:
       - "3000:3000/udp"   # p2p (UDP/QUIC)
       - "3001:3001/tcp"   # web dashboard
       # port 8080 (node HTTP API) is intentionally NOT exposed — internal only
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # reach host updater on port 3002
     env_file: .env
     restart: unless-stopped
 
