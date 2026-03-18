@@ -57,6 +57,9 @@ COPY --from=downloader /download/logos-blockchain-circuits-v${CIRCUITS_VERSION}-
 # Tell the node where the circuits live
 ENV LOGOS_BLOCKCHAIN_CIRCUITS=/opt/logos-blockchain/circuits
 
+# Default bootstrap peers — override via BOOTSTRAP_PEERS in .env
+ENV BOOTSTRAP_PEERS="/ip4/65.109.51.37/udp/3000/quic-v1/p2p/12D3KooWL7a8LBbLRYnabptHPFBCmAs49Y7cVMqvzuSdd43tAJk8 /ip4/65.109.51.37/udp/3001/quic-v1/p2p/12D3KooWPLeAcachoUm68NXGD7tmNziZkVeMmeBS5NofyukuMRJh /ip4/65.109.51.37/udp/3002/quic-v1/p2p/12D3KooWKFNe4gS5DcCcRUVGdMjZp3fUWu6q6gG5R846Ui1pccHD /ip4/65.109.51.37/udp/3003/quic-v1/p2p/12D3KooWAnriLgXyQnGTYz1zPWPkQL3rthTKYLzuAP7MMnbgsxzR"
+
 # Persistent data directory (mounted as a Railway volume)
 # Volume mount handled by Railway — do not use VOLUME directive
 WORKDIR /data
