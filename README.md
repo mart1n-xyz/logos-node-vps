@@ -1,6 +1,6 @@
 # Logos Blockchain Node — VPS Deploy
 
-Run a [Logos Blockchain](https://github.com/logos-co/nomos-node) devnet node on any Ubuntu 24.04 VPS (Hetzner, Netcup, DigitalOcean, etc.) using Docker Compose.
+Run a [Logos Blockchain](https://github.com/logos-co/nomos-node) devnet node on any Ubuntu 24.04 or Debian VPS (Hetzner, Netcup, DigitalOcean, etc.) using Docker Compose.
 
 ---
 
@@ -82,7 +82,7 @@ docker compose up -d --build
 | `NODE_API_PORT` | `8080` | Same as `API_PORT` — used by `dashboard.py` |
 | `DATA_DIR` | `/data` | Container path for config and chain state |
 | `PORT` | `3001` | Web dashboard port |
-| `DASHBOARD_PASSWORD` | *(empty)* | If set, enables HTTP basic auth (username: `admin`) |
+| `DASHBOARD_PASSWORD` | *(empty)* | If set, enables HTTP basic auth (username: `admin`). Can also be set from the dashboard Settings tab without SSH. |
 | `DOMAIN` | *(empty)* | Your domain name — only needed for the optional Caddy HTTPS setup |
 
 All variables live in `.env` (created from `.env.example` during setup).
@@ -97,7 +97,15 @@ Once the node is running, open `http://<your-server-ip>:3001` in a browser:
 - **Network / Peers** — connected peer count and connection count
 - **Wallet Keys** — your node's public keys (for the faucet)
 - **Node Logs** — last 500 lines, auto-scrolling, color-coded for errors and warnings
+- **Settings** — manage bootstrap peers and password protection without SSH
 - **Auto-refresh** every 10 seconds
+
+### Dashboard Settings
+
+The **Settings** tab lets you manage node configuration from the browser:
+
+- **Bootstrap peers editor** — edit the peer multiaddrs directly in the UI, save, and restart the node without SSH
+- **Password protection** — enable or disable dashboard HTTP basic auth from the browser (no SSH or `.env` editing needed)
 
 ### Dashboard API endpoints
 
@@ -110,18 +118,17 @@ Once the node is running, open `http://<your-server-ip>:3001` in a browser:
 
 ### Password protection
 
-Set `DASHBOARD_PASSWORD` in `.env` to enable HTTP basic auth:
+Enable HTTP basic auth by either:
+- Setting `DASHBOARD_PASSWORD` in `.env`, or
+- Using the **Settings** tab in the dashboard (no SSH needed)
 
-- Username: `admin`
-- Password: whatever you set
-
-Leave it empty for public access (fine for a devnet node).
+Username is always `admin`. Leave it empty for public access (fine for a devnet node).
 
 ---
 
 ## Auto-deploy (personal fork)
 
-Push to `main` → GitHub Actions SSHes into your VPS and redeploys automatically.
+Push to `master` → GitHub Actions SSHes into your VPS and redeploys automatically.
 
 1. **Fork** this repo on GitHub.
 2. In your fork, go to **Settings → Secrets and variables → Actions** and add three repository secrets:
@@ -129,13 +136,13 @@ Push to `main` → GitHub Actions SSHes into your VPS and redeploys automaticall
    - `VPS_USER` — SSH username (e.g. `root` or `ubuntu`)
    - `SSH_PRIVATE_KEY` — contents of your private key (e.g. `~/.ssh/id_ed25519`)
 3. Make sure `/opt/logos-node` on your VPS is a clone of your fork (the `setup.sh` script does this automatically).
-4. Push any commit to `main` — the workflow in `.github/workflows/deploy.yml` will SSH in and run:
+4. Push any commit to `master` — the workflow in `.github/workflows/deploy.yml` will SSH in and run:
    ```
    git pull
-   GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build
+   docker compose up -d --build
    ```
 
-The dashboard's **Overview** tab shows the current deployed commit SHA. If your fork falls behind the upstream repo, the dashboard displays an amber "Update available" notice with the current and latest SHAs.
+The dashboard's **Overview** tab shows the current deployed version from `version.txt`. If your fork falls behind the upstream repo, the dashboard displays an amber notice prompting you to sync your fork and redeploy.
 
 ---
 
@@ -216,7 +223,8 @@ Chain state in the `logos-data` volume is preserved across rebuilds.
 ├── docker-compose.yml  # Service definition with named volume and optional Caddy
 ├── Caddyfile           # Caddy reverse proxy config for automatic HTTPS
 ├── .env.example        # All environment variables with defaults and comments
-├── setup.sh            # One-shot installer for Ubuntu 24.04
+├── setup.sh            # One-shot installer for Ubuntu 24.04 / Debian
+├── version.txt         # Current release version, shown in the dashboard Overview tab
 └── assets/
     └── logo.png
 ```
@@ -227,6 +235,7 @@ Chain state in the `logos-data` volume is preserved across rebuilds.
 
 - Ubuntu 24.04 LTS — Hetzner CX22
 - Ubuntu 24.04 LTS — Netcup VPS 1000
+- Debian Trixie (12) — Hetzner CX22
 
 Minimum recommended specs: **2 vCPU / 4 GB RAM / 40 GB SSD**
 
