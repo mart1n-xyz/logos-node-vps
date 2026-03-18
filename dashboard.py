@@ -308,6 +308,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif path == "/api/keys":
             self._send_json(read_keys())
 
+        elif path == "/api/balances":
+            keys = read_keys()
+            balances = {}
+            seen = {}  # pubkey_value -> key_name
+            for name, value in keys.items():
+                if name in ("note", "error"):
+                    continue
+                if value in seen:
+                    balances[name] = {"duplicate_of": seen[value]}
+                else:
+                    seen[value] = name
+                    data, err = node_get(f"/wallet/{value}/balance")
+                    if err:
+                        balances[name] = {"error": err}
+                    else:
+                        balances[name] = data if data is not None else {"error": "empty response"}
+            self._send_json(balances)
+
         elif path == "/api/peers":
             self._send_json({"peers": read_peers()})
 
