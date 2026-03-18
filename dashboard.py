@@ -8,6 +8,8 @@ Optional basic auth via DASHBOARD_PASSWORD env var.
 import base64
 import json
 import os
+import signal
+import subprocess
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -76,6 +78,66 @@ def read_keys():
                 if k and v:
                     keys[k] = v
     return keys if keys else {"note": "No keys found in config yet"}
+
+
+def _env_path():
+    """Return path to .env file — prefer script dir, fall back to /data/.env."""
+    script_env = Path(__file__).with_name(".env")
+    if script_env.exists():
+        return script_env
+    return Path("/data/.env")
+
+
+def read_peers():
+    """Return list of bootstrap peer multiaddrs from BOOTSTRAP_PEERS in .env."""
+    try:
+        content = _env_path().read_text()
+    except FileNotFoundError:
+        return []
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith("BOOTSTRAP_PEERS="):
+            value = line[len("BOOTSTRAP_PEERS="):].strip().strip('"').strip("'")
+            return [p for p in value.split() if p]
+    return []
+
+
+def write_peers(peers):
+    """Write updated BOOTSTRAP_PEERS list back to .env."""
+    env_file = _env_path()
+    value = " ".join(peers)
+    try:
+        content = env_file.read_text()
+        lines = content.splitlines(keepends=True)
+    except FileNotFoundError:
+        lines = []
+    new_line = f"BOOTSTRAP_PEERS={value}\n"
+    found = False
+    for i, line in enumerate(lines):
+        if line.startswith("BOOTSTRAP_PEERS="):
+            lines[i] = new_line
+            found = True
+            break
+    if not found:
+        lines.append(new_line)
+    env_file.write_text("".join(lines))
+
+
+def restart_node():
+    """Send SIGTERM to the nomos node process. Returns (restarted, note)."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", "nomos"],
+            capture_output=True, text=True
+        )
+        pids = [int(p) for p in result.stdout.split() if p.strip().isdigit()]
+        if not pids:
+            return False, "process not found — peers saved but node not restarted"
+        for pid in pids:
+            os.kill(pid, signal.SIGTERM)
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
 
 
 def check_auth(handler):
@@ -177,6 +239,35 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/keys":
             self._send_json(read_keys())
+
+        elif path == "/api/peers":
+            self._send_json({"peers": read_peers()})
+
+        else:
+            self.send_error(404)
+
+    def do_POST(self):
+        path = self.path.split("?")[0]
+
+        if not check_auth(self):
+            self._send_auth_challenge()
+            return
+
+        if path == "/api/peers":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(body)
+                peers = data.get("peers", [])
+            except Exception:
+                self._send_json({"error": "invalid JSON"}, 400)
+                return
+            write_peers(peers)
+            restarted, note = restart_node()
+            resp = {"ok": True, "restarted": restarted}
+            if note:
+                resp["note"] = note
+            self._send_json(resp)
 
         else:
             self.send_error(404)
