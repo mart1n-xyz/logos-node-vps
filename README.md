@@ -97,7 +97,7 @@ Once the node is running, open `http://<your-server-ip>:3001` in a browser:
 - **Network / Peers** — connected peer count and connection count
 - **Wallet Keys** — your node's public keys (for the faucet)
 - **Node Logs** — last 500 lines, auto-scrolling, color-coded for errors and warnings
-- **Settings** — manage bootstrap peers and password protection without SSH
+- **Settings** — manage bootstrap peers, password protection, and software updates without SSH
 - **Auto-refresh** every 10 seconds
 
 ### Dashboard Settings
@@ -106,6 +106,7 @@ The **Settings** tab lets you manage node configuration from the browser:
 
 - **Bootstrap peers editor** — edit the peer multiaddrs directly in the UI, save, and restart the node without SSH
 - **Password protection** — enable or disable dashboard HTTP basic auth from the browser (no SSH or `.env` editing needed)
+- **Software Update** — shows your current version vs. the latest release and lets you update with one click
 
 ### Dashboard API endpoints
 
@@ -128,7 +129,9 @@ Username is always `admin`. Leave it empty for public access (fine for a devnet 
 
 ## Updating
 
-SSH into your server and run:
+The easiest way to update is from the **Settings** tab in the dashboard — the **Software Update** card shows your current version alongside the latest release and lets you trigger an update with one click.
+
+If you prefer to update manually over SSH:
 
 ```bash
 cd /opt/logos-node && git pull && docker compose up -d --build
@@ -202,6 +205,21 @@ Chain state in the `logos-data` volume is preserved across rebuilds.
 
 ---
 
+## Self-update service
+
+The `logos-node-updater` is a lightweight systemd service installed automatically by `setup.sh`. It listens on `127.0.0.1:3002` (localhost only — never publicly exposed) and handles the git pull + rebuild triggered by the dashboard update button.
+
+The dashboard proxies update requests to it, so the browser-based update button works without any additional configuration.
+
+Useful commands:
+
+```bash
+systemctl status logos-node-updater   # Check service health
+journalctl -u logos-node-updater -f   # Follow logs
+```
+
+---
+
 ## Repository structure
 
 ```
@@ -214,6 +232,8 @@ Chain state in the `logos-data` volume is preserved across rebuilds.
 ├── Caddyfile           # Caddy reverse proxy config for automatic HTTPS
 ├── .env.example        # All environment variables with defaults and comments
 ├── setup.sh            # One-shot installer for Ubuntu 24.04 / Debian
+├── updater.sh          # Self-update script run by the updater service (git pull + rebuild)
+├── logos-node-updater.service  # systemd unit for the updater service
 ├── version.txt         # Current release version, shown in the dashboard Overview tab
 └── assets/
     └── logo.png
