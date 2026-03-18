@@ -1,0 +1,17 @@
+[Unit]
+Description=Logos Node Updater Service
+Documentation=https://github.com/mart1n-xyz/logos-node-vps
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/env python3 /opt/logos-node/updater.sh
+WorkingDirectory=/opt/logos-node
+Restart=always
+RestartSec=5
+StandardOutput=append:/opt/logos-node/updater.log
+StandardError=append:/opt/logos-node/updater.log
+
+[Install]
+WantedBy=multi-user.target
