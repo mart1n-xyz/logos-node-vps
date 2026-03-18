@@ -88,6 +88,15 @@ else
     info ".env already exists — skipping copy."
 fi
 
+# ── Install / update the updater service ─────────────────────────────────────
+info "Installing logos-node-updater systemd service..."
+chmod +x "${INSTALL_DIR}/updater.sh"
+cp "${INSTALL_DIR}/logos-node-updater.service" /etc/systemd/system/logos-node-updater.service
+systemctl daemon-reload
+systemctl enable logos-node-updater
+systemctl restart logos-node-updater
+info "Updater service running on 127.0.0.1:3002"
+
 # ── Build and start ───────────────────────────────────────────────────────────
 info "Building image and starting node (this may take a few minutes on first run)..."
 docker compose up -d --build
