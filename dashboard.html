@@ -215,6 +215,81 @@
       display: none;
     }
 
+    /* Tab navigation */
+    .tab-nav {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      gap: 4px;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 10px 12px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* Settings tab */
+    #peers-textarea {
+      width: 100%;
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.6;
+      min-height: 200px;
+      padding: 12px;
+      resize: vertical;
+    }
+
+    #peers-textarea:focus { outline: none; border-color: var(--accent); }
+
+    .settings-hint {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .save-btn {
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius);
+      color: #0d1117;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 12px;
+      padding: 8px 20px;
+    }
+
+    .save-btn:hover { opacity: 0.85; }
+    .save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #settings-feedback {
+      border-radius: var(--radius);
+      display: none;
+      font-size: 12px;
+      margin-top: 10px;
+      padding: 8px 12px;
+    }
+
+    #settings-feedback.ok  { background: rgba(63,185,80,0.1); border: 1px solid var(--green); color: var(--green); }
+    #settings-feedback.err { background: rgba(248,81,73,0.1);  border: 1px solid var(--red);   color: var(--red); }
+
     @media (max-width: 600px) {
       header { padding: 10px 16px; }
       main   { padding: 12px 8px; gap: 12px; }
@@ -230,6 +305,12 @@
     <div id="refresh-info">Refreshing in <span id="countdown">10</span>s</div>
   </header>
 
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="overview">Overview</button>
+    <button class="tab-btn" data-tab="settings">⚙ Settings</button>
+  </nav>
+
+  <div id="tab-overview">
   <main>
     <!-- Node Status + Peers — side by side -->
     <div class="stats-row">
@@ -283,6 +364,23 @@
       <div id="log-box"></div>
     </div>
   </main>
+  </div><!-- #tab-overview -->
+
+  <div id="tab-settings" style="display:none">
+  <main>
+    <div class="card">
+      <div class="card-title">
+        <span class="dot"></span>
+        Bootstrap Peers
+      </div>
+      <p class="settings-hint">One multiaddr per line. Changes are saved to <code>.env</code> and the node is restarted via SIGTERM.</p>
+      <textarea id="peers-textarea" placeholder="Loading…" spellcheck="false"></textarea>
+      <br>
+      <button class="save-btn" id="save-peers-btn">Save &amp; Restart Node</button>
+      <div id="settings-feedback"></div>
+    </div>
+  </main>
+  </div><!-- #tab-settings -->
 
   <script>
     function setText(el, text, cls) {
@@ -438,6 +536,64 @@
 
     refresh();
     setInterval(tick, 1000);
+
+    // ── Tab navigation ──────────────────────────────────────────────────────
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.tab;
+        document.getElementById('tab-overview').style.display = tab === 'overview' ? '' : 'none';
+        document.getElementById('tab-settings').style.display = tab === 'settings'  ? '' : 'none';
+        if (tab === 'settings') loadPeers();
+      });
+    });
+
+    // ── Settings: bootstrap peers ────────────────────────────────────────────
+    async function loadPeers() {
+      const ta = document.getElementById('peers-textarea');
+      try {
+        const data = await fetchJSON('/api/peers');
+        ta.value = (data.peers || []).join('\n');
+      } catch (err) {
+        ta.value = '';
+        showSettingsFeedback('Failed to load peers: ' + err, 'err');
+      }
+    }
+
+    function showSettingsFeedback(msg, type) {
+      const el = document.getElementById('settings-feedback');
+      el.textContent = msg;
+      el.className = type;
+      el.style.display = 'block';
+    }
+
+    document.getElementById('save-peers-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('save-peers-btn');
+      const raw = document.getElementById('peers-textarea').value;
+      const peers = raw.split('\n').map(s => s.trim()).filter(Boolean);
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      try {
+        const resp = await fetch('/api/peers', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({peers}),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          const note = data.note ? ` (${data.note})` : '';
+          showSettingsFeedback('Saved' + (data.restarted ? ' & node restarted' : note) + '.', 'ok');
+        } else {
+          showSettingsFeedback('Error: ' + (data.error || 'unknown'), 'err');
+        }
+      } catch (err) {
+        showSettingsFeedback('Request failed: ' + err, 'err');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save & Restart Node';
+      }
+    });
   </script>
 </body>
 </html>
