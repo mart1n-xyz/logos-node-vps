@@ -36,9 +36,6 @@ RUN curl -fsSL \
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM ubuntu:24.04
 
-ARG GIT_SHA=unknown
-ENV GIT_SHA=$GIT_SHA
-
 ARG CIRCUITS_VERSION
 
 # Install runtime dependencies (glibc 2.39 is provided by ubuntu:24.04)
@@ -68,6 +65,7 @@ ENV BOOTSTRAP_PEERS="/ip4/65.109.51.37/udp/3000/quic-v1/p2p/12D3KooWL7a8LBbLRYna
 WORKDIR /data
 
 # Copy entrypoint and dashboard
+COPY version.txt    /version.txt
 COPY entrypoint.sh  /usr/local/bin/entrypoint.sh
 COPY dashboard.py   /usr/local/bin/dashboard.py
 COPY dashboard.html /usr/local/bin/dashboard.html

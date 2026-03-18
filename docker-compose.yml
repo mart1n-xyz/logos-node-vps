@@ -3,7 +3,6 @@ services:
     build:
       context: .
       args:
-        GIT_SHA: ${GIT_SHA:-unknown}
         NODE_VERSION: "0.2.1"
         CIRCUITS_VERSION: "0.4.1"
     volumes:
