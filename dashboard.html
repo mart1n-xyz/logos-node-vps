@@ -653,7 +653,7 @@
       } catch (_) {}
 
       try {
-        const gh = await fetch('https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/main/version.txt');
+        const gh = await fetch('https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/master/version.txt');
         if (!gh.ok) throw new Error('fetch failed');
         _latestVersion = (await gh.text()).trim();
 
