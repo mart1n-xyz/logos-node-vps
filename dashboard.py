@@ -15,6 +15,9 @@ import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
+UPDATER_HOST = os.environ.get("UPDATER_HOST", "host.docker.internal")
+UPDATER_PORT = int(os.environ.get("UPDATER_PORT", "3002"))
+
 DASHBOARD_PORT = int(os.environ.get("PORT", "3001"))
 NODE_API_PORT  = int(os.environ.get("NODE_API_PORT", "8080"))
 def _read_version():
@@ -160,6 +163,33 @@ def write_peers(peers):
     env_file.write_text("".join(lines))
 
 
+def updater_get(path):
+    """GET from the host updater service. Returns (data, error_str)."""
+    url = f"http://{UPDATER_HOST}:{UPDATER_PORT}{path}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            return json.loads(resp.read()), None
+    except Exception as exc:
+        return None, str(exc)
+
+
+def updater_post(path):
+    """POST to the host updater service (no body needed). Returns (data, error_str)."""
+    url = f"http://{UPDATER_HOST}:{UPDATER_PORT}{path}"
+    try:
+        req = urllib.request.Request(url, data=b"{}", method="POST")
+        req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read()), None
+    except urllib.error.HTTPError as exc:
+        try:
+            return json.loads(exc.read()), None
+        except Exception:
+            return None, f"HTTP {exc.code}"
+    except Exception as exc:
+        return None, str(exc)
+
+
 def restart_node():
     """Send SIGTERM to the nomos node process. Returns (restarted, note)."""
     try:
@@ -287,6 +317,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif path == "/api/auth-status":
             self._send_json({"enabled": bool(read_password())})
 
+        elif path == "/api/update/status":
+            data, err = updater_get("/update/status")
+            if err:
+                self._send_json({"error": err}, 502)
+            else:
+                self._send_json(data)
+
         else:
             self.send_error(404)
 
@@ -324,6 +361,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             write_password(password)
             self._send_json({"ok": True})
+
+        elif path == "/api/update":
+            data, err = updater_post("/update")
+            if err:
+                self._send_json({"ok": False, "error": err}, 502)
+            else:
+                self._send_json(data)
 
         else:
             self.send_error(404)
