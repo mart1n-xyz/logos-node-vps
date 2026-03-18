@@ -119,6 +119,26 @@ Leave it empty for public access (fine for a devnet node).
 
 ---
 
+## Auto-deploy (personal fork)
+
+Push to `main` → GitHub Actions SSHes into your VPS and redeploys automatically.
+
+1. **Fork** this repo on GitHub.
+2. In your fork, go to **Settings → Secrets and variables → Actions** and add three repository secrets:
+   - `VPS_HOST` — your server's IP address or hostname
+   - `VPS_USER` — SSH username (e.g. `root` or `ubuntu`)
+   - `SSH_PRIVATE_KEY` — contents of your private key (e.g. `~/.ssh/id_ed25519`)
+3. Make sure `/opt/logos-node` on your VPS is a clone of your fork (the `setup.sh` script does this automatically).
+4. Push any commit to `main` — the workflow in `.github/workflows/deploy.yml` will SSH in and run:
+   ```
+   git pull
+   GIT_SHA=$(git rev-parse HEAD) docker compose up -d --build
+   ```
+
+The dashboard's **Overview** tab shows the current deployed commit SHA. If your fork falls behind the upstream repo, the dashboard displays an amber "Update available" notice with the current and latest SHAs.
+
+---
+
 ## Optional: HTTPS with Caddy
 
 The `docker-compose.yml` includes a commented-out Caddy service that adds automatic HTTPS via Let's Encrypt.
