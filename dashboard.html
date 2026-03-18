@@ -585,31 +585,27 @@
     // ── Version indicator ────────────────────────────────────────────────────
     async function updateVersion() {
       const el = document.getElementById('version-indicator');
-      let currentSha = 'unknown';
+      let currentVersion = 'unknown';
       try {
         const v = await fetchJSON('/api/version');
-        currentSha = v.sha || 'unknown';
+        currentVersion = v.version || 'unknown';
       } catch (_) {}
 
-      const shortCurrent = currentSha === 'unknown' ? 'unknown' : currentSha.slice(0, 7);
-
       try {
-        const gh = await fetch('https://api.github.com/repos/mart1n-xyz/logos-node-vps/commits/main');
-        if (!gh.ok) throw new Error('rate limited');
-        const ghData = await gh.json();
-        const latestSha = ghData.sha || '';
-        const shortLatest = latestSha.slice(0, 7);
+        const gh = await fetch('https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/main/version.txt');
+        if (!gh.ok) throw new Error('fetch failed');
+        const latestVersion = (await gh.text()).trim();
 
-        if (currentSha === 'unknown' || latestSha.startsWith(currentSha) || currentSha.startsWith(latestSha)) {
+        if (currentVersion === 'unknown' || currentVersion === latestVersion) {
           el.className = '';
-          el.textContent = `Version: ${shortCurrent}`;
+          el.textContent = `Version: ${currentVersion}`;
         } else {
           el.className = 'behind';
-          el.textContent = `Update available — sync your fork to redeploy (current: ${shortCurrent}, latest: ${shortLatest})`;
+          el.textContent = `Update available — sync your fork to redeploy (running: ${currentVersion}, latest: ${latestVersion})`;
         }
       } catch (_) {
         el.className = '';
-        el.textContent = currentSha !== 'unknown' ? `Version: ${shortCurrent}` : '';
+        el.textContent = currentVersion !== 'unknown' ? `Version: ${currentVersion}` : '';
       }
     }
 
