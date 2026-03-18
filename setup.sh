@@ -2,7 +2,7 @@
 # setup.sh — One-shot installer for Logos Blockchain Node on Ubuntu 24.04
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/YOUR_USER/logos-node-vps/main/setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/main/setup.sh | bash
 #   # or, after cloning:
 #   sudo bash setup.sh
 #
@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/YOUR_USER/logos-node-vps.git"
+REPO_URL="https://github.com/mart1n-xyz/logos-node-vps.git"
 INSTALL_DIR="/opt/logos-node"
 
 # ── Colour helpers ────────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ Run a [Logos Blockchain](https://github.com/logos-co/nomos-node) devnet node on 
 ## Quick start — one SSH command
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/YOUR_USER/logos-node-vps/main/setup.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/main/setup.sh | sudo bash
 ```
 
 This will:
@@ -25,7 +25,7 @@ This will:
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/YOUR_USER/logos-node-vps.git /opt/logos-node
+git clone https://github.com/mart1n-xyz/logos-node-vps.git /opt/logos-node
 cd /opt/logos-node
 
 # 2. Create your env file
