@@ -126,23 +126,13 @@ Username is always `admin`. Leave it empty for public access (fine for a devnet 
 
 ---
 
-## Auto-deploy (personal fork)
+## Updating
 
-Push to `master` → GitHub Actions SSHes into your VPS and redeploys automatically.
+SSH into your server and run:
 
-1. **Fork** this repo on GitHub.
-2. In your fork, go to **Settings → Secrets and variables → Actions** and add three repository secrets:
-   - `VPS_HOST` — your server's IP address or hostname
-   - `VPS_USER` — SSH username (e.g. `root` or `ubuntu`)
-   - `SSH_PRIVATE_KEY` — contents of your private key (e.g. `~/.ssh/id_ed25519`)
-3. Make sure `/opt/logos-node` on your VPS is a clone of your fork (the `setup.sh` script does this automatically).
-4. Push any commit to `master` — the workflow in `.github/workflows/deploy.yml` will SSH in and run:
-   ```
-   git pull
-   docker compose up -d --build
-   ```
-
-The dashboard's **Overview** tab shows the current deployed version from `version.txt`. If your fork falls behind the upstream repo, the dashboard displays an amber notice prompting you to sync your fork and redeploy.
+```bash
+cd /opt/logos-node && git pull && docker compose up -d --build
+```
 
 ---
 
