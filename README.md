@@ -43,9 +43,17 @@ docker compose logs -f
 
 Open the required ports before starting:
 
+**Ubuntu (ufw):**
 ```bash
 ufw allow 3000/udp   # p2p (UDP/QUIC)
 ufw allow 3001/tcp   # web dashboard
+```
+
+**Debian (iptables — no ufw by default):**
+```bash
+iptables -A INPUT -p udp --dport 3000 -j ACCEPT   # p2p (UDP/QUIC)
+iptables -A INPUT -p tcp --dport 3001 -j ACCEPT   # web dashboard
+iptables -A INPUT -p tcp --dport 3002 -i eth0 -j DROP  # block updater externally (see below)
 ```
 
 Port 8080 (node HTTP API) is **internal only** and should not be exposed.
@@ -207,7 +215,15 @@ Chain state in the `logos-data` volume is preserved across rebuilds.
 
 ## Self-update service
 
-The `logos-node-updater` is a lightweight systemd service installed automatically by `setup.sh`. It listens on `127.0.0.1:3002` (localhost only — never publicly exposed) and handles the git pull + rebuild triggered by the dashboard update button.
+The `logos-node-updater` is a lightweight systemd service installed automatically by `setup.sh`. It listens on `0.0.0.0:3002` — required so the Docker container can reach it via the host gateway. Port 3002 is **not** in Docker's `ports:` mapping, so it is not publicly exposed through Docker.
+
+However, on Debian (no ufw by default), you should block it at the network level:
+
+```bash
+iptables -A INPUT -p tcp --dport 3002 -i eth0 -j DROP
+```
+
+On Ubuntu with ufw active, port 3002 is blocked by default unless you explicitly open it.
 
 The dashboard proxies update requests to it, so the browser-based update button works without any additional configuration.
 
@@ -245,7 +261,7 @@ journalctl -u logos-node-updater -f   # Follow logs
 
 - Ubuntu 24.04 LTS — Hetzner CX22
 - Ubuntu 24.04 LTS — Netcup VPS 1000
-- Debian Trixie (12) — Hetzner CX22
+- Debian Trixie (13) — Hetzner CX22
 
 Minimum recommended specs: **2 vCPU / 4 GB RAM / 40 GB SSD**
 
