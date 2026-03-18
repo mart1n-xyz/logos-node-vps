@@ -187,7 +187,11 @@ These are pre-filled in `.env.example`. Update `BOOTSTRAP_PEERS` in `.env` when 
 
 ## Getting devnet tokens
 
-Visit the Logos faucet (link in the [official docs](https://github.com/logos-co/nomos-node)) and paste your node's public key. You can find your public key in the **Wallet Keys** card on the dashboard, or in `/var/lib/docker/volumes/logos-node-vps_logos-data/_data/user_config.yaml` on the host.
+1. Copy one of your public keys from the **Wallet Keys** card in the dashboard.
+2. Visit the faucet at **https://devnet.blockchain.logos.co/web/faucet/**
+3. You'll need credentials from the Logos team — request them in the [Logos Discord](https://discord.com/channels/973324189794697286/1468535289604735038).
+4. Paste your key and request funds.
+5. Once your node is synced, the balance will appear next to the key in the **Wallet Keys** card.
 
 ---
 
