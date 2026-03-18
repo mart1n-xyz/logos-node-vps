@@ -393,6 +393,21 @@
       <button class="save-btn" id="save-peers-btn">Save &amp; Restart Node</button>
       <div id="settings-feedback"></div>
     </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span class="dot"></span>
+        Dashboard Password
+      </div>
+      <p class="settings-hint">Protects the dashboard with HTTP basic auth (username: <code>admin</code>). Leave empty to disable.</p>
+      <div id="auth-status" style="font-size:12px;margin-top:10px;margin-bottom:12px;color:var(--muted)">Checking…</div>
+      <input type="password" id="password-input" placeholder="New password (leave empty to disable)"
+        style="width:100%;background:#010409;border:1px solid var(--border);border-radius:var(--radius);
+               color:var(--text);font-family:var(--mono);font-size:12px;padding:8px 10px;">
+      <br>
+      <button class="save-btn" id="save-password-btn">Save Password</button>
+      <div id="password-feedback" style="border-radius:var(--radius);display:none;font-size:12px;margin-top:10px;padding:8px 12px;"></div>
+    </div>
   </main>
   </div><!-- #tab-settings -->
 
@@ -559,7 +574,7 @@
         const tab = btn.dataset.tab;
         document.getElementById('tab-overview').style.display = tab === 'overview' ? '' : 'none';
         document.getElementById('tab-settings').style.display = tab === 'settings'  ? '' : 'none';
-        if (tab === 'settings') loadPeers();
+        if (tab === 'settings') { loadPeers(); loadAuthStatus(); }
       });
     });
 
@@ -610,6 +625,56 @@
     }
 
     updateVersion();
+
+    // ── Settings: password ──────────────────────────────────────────────────
+    async function loadAuthStatus() {
+      const el = document.getElementById('auth-status');
+      try {
+        const data = await fetchJSON('/api/auth-status');
+        if (data.enabled) {
+          el.innerHTML = 'Password protection: <span style="color:var(--green);font-weight:600">enabled ✓</span>';
+        } else {
+          el.textContent = 'Password protection: disabled';
+        }
+      } catch (_) {
+        el.textContent = 'Could not fetch auth status.';
+      }
+    }
+
+    document.getElementById('save-password-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('save-password-btn');
+      const fb  = document.getElementById('password-feedback');
+      const password = document.getElementById('password-input').value;
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+      fb.style.display = 'none';
+      try {
+        const resp = await fetch('/api/set-password', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({password}),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          fb.textContent = 'Saved — takes effect immediately';
+          fb.className = '';
+          fb.style.cssText = 'display:block;border-radius:var(--radius);font-size:12px;margin-top:10px;padding:8px 12px;background:rgba(63,185,80,0.1);border:1px solid var(--green);color:var(--green)';
+          document.getElementById('password-input').value = '';
+          loadAuthStatus();
+        } else {
+          fb.textContent = 'Error: ' + (data.error || 'unknown');
+          fb.className = '';
+          fb.style.cssText = 'display:block;border-radius:var(--radius);font-size:12px;margin-top:10px;padding:8px 12px;background:rgba(248,81,73,0.1);border:1px solid var(--red);color:var(--red)';
+        }
+      } catch (err) {
+        fb.textContent = 'Request failed: ' + err;
+        fb.className = '';
+        fb.style.cssText = 'display:block;border-radius:var(--radius);font-size:12px;margin-top:10px;padding:8px 12px;background:rgba(248,81,73,0.1);border:1px solid var(--red);color:var(--red)';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Save Password';
+      }
+    });
 
     document.getElementById('save-peers-btn').addEventListener('click', async () => {
       const btn = document.getElementById('save-peers-btn');
