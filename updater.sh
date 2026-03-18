@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 INSTALL_DIR  = "/opt/logos-node"
 LOG_FILE     = "/opt/logos-node/updater.log"
-LISTEN_HOST  = "127.0.0.1"
+LISTEN_HOST  = "0.0.0.0"
 LISTEN_PORT  = 3002
 
 _state = {
