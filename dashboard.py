@@ -18,6 +18,7 @@ from pathlib import Path
 DASHBOARD_PORT = int(os.environ.get("PORT", "3001"))
 NODE_API_PORT  = int(os.environ.get("NODE_API_PORT", "8080"))
 DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
+GIT_SHA = os.environ.get("GIT_SHA", "unknown")
 DATA_DIR    = os.environ.get("DATA_DIR", "/data")
 LOG_FILE    = os.path.join(DATA_DIR, "node.log")
 CONFIG_FILE = os.path.join(DATA_DIR, "user_config.yaml")
@@ -242,6 +243,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         elif path == "/api/peers":
             self._send_json({"peers": read_peers()})
+
+        elif path == "/api/version":
+            self._send_json({"sha": GIT_SHA})
 
         else:
             self.send_error(404)
