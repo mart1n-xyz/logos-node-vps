@@ -36,6 +36,9 @@ RUN curl -fsSL \
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM ubuntu:24.04
 
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
+
 ARG CIRCUITS_VERSION
 
 # Install runtime dependencies (glibc 2.39 is provided by ubuntu:24.04)
