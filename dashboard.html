@@ -302,6 +302,39 @@
       color: var(--yellow);
     }
 
+    #update-output {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: #7ee787;
+      display: none;
+      font-family: var(--mono);
+      font-size: 11px;
+      line-height: 1.5;
+      margin-top: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 10px 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .update-btn {
+      background: var(--yellow);
+      border: none;
+      border-radius: var(--radius);
+      color: #0d1117;
+      cursor: pointer;
+      font-family: var(--font);
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: 12px;
+      padding: 8px 20px;
+    }
+
+    .update-btn:hover   { opacity: 0.85; }
+    .update-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
     @media (max-width: 600px) {
       header { padding: 10px 16px; }
       main   { padding: 12px 8px; gap: 12px; }
@@ -392,6 +425,17 @@
       <br>
       <button class="save-btn" id="save-peers-btn">Save &amp; Restart Node</button>
       <div id="settings-feedback"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span class="dot" id="update-dot"></span>
+        Software Update
+      </div>
+      <div id="update-version-info" style="font-size:12px;color:var(--muted);margin-bottom:4px">Checking versions…</div>
+      <button class="update-btn" id="update-btn" disabled>Update Now</button>
+      <div id="update-status-msg" style="font-size:12px;color:var(--muted);margin-top:8px;display:none"></div>
+      <pre id="update-output"></pre>
     </div>
 
     <div class="card">
@@ -574,7 +618,7 @@
         const tab = btn.dataset.tab;
         document.getElementById('tab-overview').style.display = tab === 'overview' ? '' : 'none';
         document.getElementById('tab-settings').style.display = tab === 'settings'  ? '' : 'none';
-        if (tab === 'settings') { loadPeers(); loadAuthStatus(); }
+        if (tab === 'settings') { loadPeers(); loadAuthStatus(); _refreshUpdateSection(); }
       });
     });
 
@@ -597,34 +641,149 @@
       el.style.display = 'block';
     }
 
-    // ── Version indicator ────────────────────────────────────────────────────
+    // ── Version indicator + update section ──────────────────────────────────
+    let _currentVersion = 'unknown';
+    let _latestVersion  = 'unknown';
+
     async function updateVersion() {
       const el = document.getElementById('version-indicator');
-      let currentVersion = 'unknown';
       try {
         const v = await fetchJSON('/api/version');
-        currentVersion = v.version || 'unknown';
+        _currentVersion = v.version || 'unknown';
       } catch (_) {}
 
       try {
         const gh = await fetch('https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/main/version.txt');
         if (!gh.ok) throw new Error('fetch failed');
-        const latestVersion = (await gh.text()).trim();
+        _latestVersion = (await gh.text()).trim();
 
-        if (currentVersion === 'unknown' || currentVersion === latestVersion) {
+        if (_currentVersion === 'unknown' || _currentVersion === _latestVersion) {
           el.className = '';
-          el.textContent = `Version: ${currentVersion}`;
+          el.textContent = `Version: ${_currentVersion}`;
         } else {
           el.className = 'behind';
-          el.textContent = `Update available — sync your fork to redeploy (running: ${currentVersion}, latest: ${latestVersion})`;
+          el.textContent = `Update available: ${_currentVersion} → ${_latestVersion}`;
         }
       } catch (_) {
         el.className = '';
-        el.textContent = currentVersion !== 'unknown' ? `Version: ${currentVersion}` : '';
+        el.textContent = _currentVersion !== 'unknown' ? `Version: ${_currentVersion}` : '';
+      }
+
+      _refreshUpdateSection();
+    }
+
+    function _refreshUpdateSection() {
+      const info = document.getElementById('update-version-info');
+      const btn  = document.getElementById('update-btn');
+      const dot  = document.getElementById('update-dot');
+      if (!info) return; // settings tab may not be active yet
+
+      const updateAvailable = _latestVersion !== 'unknown' &&
+                              _currentVersion !== 'unknown' &&
+                              _latestVersion !== _currentVersion;
+
+      if (_currentVersion === 'unknown' && _latestVersion === 'unknown') {
+        info.textContent = 'Could not determine versions.';
+        info.style.color = 'var(--muted)';
+      } else if (updateAvailable) {
+        info.textContent = `Update available: running ${_currentVersion}, latest ${_latestVersion}.`;
+        info.style.color = 'var(--yellow)';
+        dot.className = 'dot yellow';
+      } else {
+        info.textContent = `Up to date (${_currentVersion}).`;
+        info.style.color = 'var(--green)';
+        dot.className = 'dot green';
+      }
+
+      if (!btn.disabled || btn.textContent === 'Update Now') {
+        btn.disabled = false;
+        if (updateAvailable) {
+          btn.textContent = 'Update Now';
+        } else {
+          btn.textContent = 'Re-deploy (already up to date)';
+          btn.style.background = 'var(--muted)';
+        }
       }
     }
 
     updateVersion();
+
+    // ── Update button ────────────────────────────────────────────────────────
+    let _updatePollTimer = null;
+
+    async function _pollUpdateStatus() {
+      try {
+        const data = await fetchJSON('/api/update/status');
+        _showUpdateStatus(data);
+        if (!data.in_progress) {
+          clearInterval(_updatePollTimer);
+          _updatePollTimer = null;
+          document.getElementById('update-btn').disabled = false;
+          document.getElementById('update-btn').textContent = 'Update Now';
+        }
+      } catch (_) {}
+    }
+
+    function _showUpdateStatus(data) {
+      const msg    = document.getElementById('update-status-msg');
+      const output = document.getElementById('update-output');
+
+      if (data.in_progress) {
+        msg.textContent = 'Update in progress…';
+        msg.style.color = 'var(--yellow)';
+        msg.style.display = 'block';
+      } else if (data.last_result === 'ok') {
+        msg.textContent = `Update succeeded at ${data.last_run || ''}.`;
+        msg.style.color = 'var(--green)';
+        msg.style.display = 'block';
+        _currentVersion = _latestVersion; // optimistically update displayed version
+        _refreshUpdateSection();
+      } else if (data.last_result === 'error') {
+        msg.textContent = `Update failed at ${data.last_run || ''}.`;
+        msg.style.color = 'var(--red)';
+        msg.style.display = 'block';
+      }
+
+      if (data.last_output) {
+        output.textContent = data.last_output;
+        output.style.display = 'block';
+        output.scrollTop = output.scrollHeight;
+      }
+    }
+
+    document.getElementById('update-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('update-btn');
+      const msg = document.getElementById('update-status-msg');
+      btn.disabled = true;
+      btn.textContent = 'Starting…';
+      msg.style.display = 'none';
+      document.getElementById('update-output').style.display = 'none';
+
+      try {
+        const resp = await fetch('/api/update', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok) {
+          btn.textContent = 'Updating…';
+          msg.textContent = 'Update started — this page will go down briefly when the container restarts.';
+          msg.style.color = 'var(--yellow)';
+          msg.style.display = 'block';
+          if (_updatePollTimer) clearInterval(_updatePollTimer);
+          _updatePollTimer = setInterval(_pollUpdateStatus, 2000);
+        } else {
+          msg.textContent = 'Error: ' + (data.message || data.error || 'unknown');
+          msg.style.color = 'var(--red)';
+          msg.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Update Now';
+        }
+      } catch (err) {
+        msg.textContent = 'Request failed: ' + err;
+        msg.style.color = 'var(--red)';
+        msg.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Update Now';
+      }
+    });
 
     // ── Settings: password ──────────────────────────────────────────────────
     async function loadAuthStatus() {
