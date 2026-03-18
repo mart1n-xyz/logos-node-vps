@@ -17,7 +17,6 @@ from pathlib import Path
 
 DASHBOARD_PORT = int(os.environ.get("PORT", "3001"))
 NODE_API_PORT  = int(os.environ.get("NODE_API_PORT", "8080"))
-DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
 def _read_version():
     for path in ("/version.txt", "./version.txt"):
         try:
@@ -95,6 +94,37 @@ def _env_path():
     return Path("/data/.env")
 
 
+def read_password():
+    """Read DASHBOARD_PASSWORD from .env; fall back to environment variable."""
+    try:
+        content = _env_path().read_text()
+        for line in content.splitlines():
+            line = line.strip()
+            if line.startswith("DASHBOARD_PASSWORD="):
+                return line[len("DASHBOARD_PASSWORD="):].strip().strip('"').strip("'")
+    except FileNotFoundError:
+        pass
+    return os.environ.get("DASHBOARD_PASSWORD", "")
+
+
+def write_password(password):
+    """Write DASHBOARD_PASSWORD to .env (update existing line or append)."""
+    env_file = _env_path()
+    new_line = f"DASHBOARD_PASSWORD={password}\n"
+    try:
+        content = env_file.read_text()
+        lines = content.splitlines(keepends=True)
+    except FileNotFoundError:
+        lines = []
+    for i, line in enumerate(lines):
+        if line.startswith("DASHBOARD_PASSWORD="):
+            lines[i] = new_line
+            env_file.write_text("".join(lines))
+            return
+    lines.append(new_line)
+    env_file.write_text("".join(lines))
+
+
 def read_peers():
     """Return list of bootstrap peer multiaddrs from BOOTSTRAP_PEERS in .env."""
     try:
@@ -149,7 +179,8 @@ def restart_node():
 
 def check_auth(handler):
     """Return True if auth passes or no password is required."""
-    if not DASHBOARD_PASSWORD:
+    current_password = read_password()
+    if not current_password:
         return True
     auth_header = handler.headers.get("Authorization", "")
     if not auth_header.startswith("Basic "):
@@ -157,7 +188,7 @@ def check_auth(handler):
     try:
         decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
         _, _, password = decoded.partition(":")
-        return password == DASHBOARD_PASSWORD
+        return password == current_password
     except Exception:
         return False
 
@@ -253,6 +284,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         elif path == "/api/version":
             self._send_json({"version": _read_version()})
 
+        elif path == "/api/auth-status":
+            self._send_json({"enabled": bool(read_password())})
+
         else:
             self.send_error(404)
 
@@ -279,12 +313,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 resp["note"] = note
             self._send_json(resp)
 
+        elif path == "/api/set-password":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(body)
+                password = data.get("password", "")
+            except Exception:
+                self._send_json({"error": "invalid JSON"}, 400)
+                return
+            write_password(password)
+            self._send_json({"ok": True})
+
         else:
             self.send_error(404)
 
 
 if __name__ == "__main__":
     server = HTTPServer(("0.0.0.0", DASHBOARD_PORT), DashboardHandler)
-    auth_status = "password-protected" if DASHBOARD_PASSWORD else "public (no password set)"
+    auth_status = "password-protected" if read_password() else "public (no password set)"
     print(f"[dashboard] Listening on :{DASHBOARD_PORT} — {auth_status}", flush=True)
     server.serve_forever()
