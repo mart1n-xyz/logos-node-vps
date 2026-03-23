@@ -125,6 +125,40 @@ The **Settings** tab lets you manage node configuration from the browser:
 | `GET /api/logs` | Last 500 log lines as JSON |
 | `GET /api/keys` | Node public keys from `user_config.yaml` |
 
+### Node API proxy
+
+External apps can interact with the node through authenticated proxy routes at `/api/node/*`. All proxy routes require either an API key or basic auth.
+
+**Available proxy routes:**
+
+| Endpoint | Method | Proxies to |
+|---|---|---|
+| `/api/node/mempool/add/tx` | POST | Submit a transaction |
+| `/api/node/wallet/transactions/transfer-funds` | POST | Transfer funds |
+| `/api/node/cryptarchia/info` | GET | Chain state info |
+| `/api/node/cryptarchia/headers` | GET | Block headers |
+| `/api/node/cryptarchia/blocks` | GET | Blocks |
+| `/api/node/network/info` | GET | Network / peer info |
+| `/api/node/storage/block` | GET | Fetch a block |
+| `/api/node/wallet/{key}/balance` | GET | Wallet balance |
+
+**Usage:**
+
+```bash
+curl -H "X-API-Key: YOUR_KEY" http://your-server:3001/api/node/cryptarchia/info
+```
+
+### API key management
+
+Generate and manage API keys from the **Settings** tab in the dashboard. Keys are 32-character hex strings stored in `DATA_DIR/api_keys.json`.
+
+- Full key is shown **once** on creation — copy it immediately
+- Keys can be deleted from the dashboard at any time
+- Both `X-API-Key` header and basic auth are accepted on `/api/node/*` routes
+- CORS headers are included for browser-based apps
+
+> **⚠️ Security notice:** API keys and dashboard passwords are transmitted in cleartext over HTTP. For production or mainnet use, enable HTTPS via Caddy (see below) or use a reverse proxy with TLS. API keys are stored in plaintext on disk. This setup is appropriate for devnet nodes; do not use it to protect accounts with real value.
+
 ### Password protection
 
 Enable HTTP basic auth by either:
