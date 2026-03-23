@@ -6,8 +6,10 @@ Optional basic auth via DASHBOARD_PASSWORD env var.
 """
 
 import base64
+import datetime
 import json
 import os
+import secrets
 import signal
 import subprocess
 import urllib.request
@@ -27,11 +29,12 @@ def _read_version():
         except OSError:
             pass
     return "unknown"
-DATA_DIR    = os.environ.get("DATA_DIR", "/data")
-LOG_FILE    = os.path.join(DATA_DIR, "node.log")
-CONFIG_FILE = os.path.join(DATA_DIR, "user_config.yaml")
+DATA_DIR       = os.environ.get("DATA_DIR", "/data")
+LOG_FILE       = os.path.join(DATA_DIR, "node.log")
+CONFIG_FILE    = os.path.join(DATA_DIR, "user_config.yaml")
+API_KEYS_FILE  = os.path.join(DATA_DIR, "api_keys.json")
 DASHBOARD_HTML = Path(__file__).with_name("dashboard.html")
-ASSETS_DIR = Path(__file__).with_name("assets")
+ASSETS_DIR     = Path(__file__).with_name("assets")
 
 
 def node_get(path):
@@ -208,7 +211,7 @@ def restart_node():
 
 
 def check_auth(handler):
-    """Return True if auth passes or no password is required."""
+    """Return True if basic auth passes or no password is required."""
     current_password = read_password()
     if not current_password:
         return True
@@ -221,6 +224,89 @@ def check_auth(handler):
         return password == current_password
     except Exception:
         return False
+
+
+# ── API key management ────────────────────────────────────────────────────────
+
+def read_api_keys():
+    """Read API keys from JSON file. Returns list of {key, name, created_at}."""
+    try:
+        with open(API_KEYS_FILE, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def _write_api_keys(keys):
+    """Write API keys list to JSON file."""
+    with open(API_KEYS_FILE, "w") as f:
+        json.dump(keys, f, indent=2)
+
+
+def generate_api_key(name):
+    """Generate a new 32-char hex API key. Returns the new key entry."""
+    key = secrets.token_hex(16)
+    entry = {
+        "key": key,
+        "name": name,
+        "created_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    keys = read_api_keys()
+    keys.append(entry)
+    _write_api_keys(keys)
+    return entry
+
+
+def delete_api_key(key):
+    """Delete an API key by value. Returns True if found and deleted."""
+    keys = read_api_keys()
+    new_keys = [k for k in keys if k["key"] != key]
+    if len(new_keys) == len(keys):
+        return False
+    _write_api_keys(new_keys)
+    return True
+
+
+def check_api_key(handler):
+    """Return True if X-API-Key header matches a stored key."""
+    api_key = handler.headers.get("X-API-Key", "")
+    if not api_key:
+        return False
+    return any(k["key"] == api_key for k in read_api_keys())
+
+
+def check_any_auth(handler):
+    """Return True if basic auth OR API key auth passes (or no auth configured)."""
+    return check_auth(handler) or check_api_key(handler)
+
+
+# ── Node API proxy ────────────────────────────────────────────────────────────
+
+def node_proxy(method, node_path, query_string="", body=b"", content_type=None):
+    """Proxy a request to the node API.
+    Returns (status_code, response_bytes, response_content_type, error_str)."""
+    url = f"http://127.0.0.1:{NODE_API_PORT}{node_path}"
+    if query_string:
+        url += "?" + query_string
+    try:
+        req = urllib.request.Request(
+            url,
+            data=(body if body else None),
+            method=method,
+        )
+        if content_type and body:
+            req.add_header("Content-Type", content_type)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp_ct = resp.headers.get("Content-Type", "application/json")
+            return resp.status, resp.read(), resp_ct, None
+    except urllib.error.HTTPError as exc:
+        try:
+            resp_ct = exc.headers.get("Content-Type", "application/json")
+            return exc.code, exc.read(), resp_ct, None
+        except Exception:
+            return exc.code, b"", "application/json", None
+    except Exception as exc:
+        return 502, json.dumps({"error": str(exc)}).encode(), "application/json", None
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -271,6 +357,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(content)))
         self.end_headers()
         self.wfile.write(content)
+
+    def _add_cors_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "X-API-Key, Content-Type, Authorization")
+
+    def _send_proxy_response(self, status, data, content_type="application/json"):
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self._add_cors_headers()
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_OPTIONS(self):
+        path = self.path.split("?")[0]
+        if path.startswith("/api/node/"):
+            self.send_response(204)
+            self._add_cors_headers()
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+        else:
+            self.send_error(405)
 
     def do_GET(self):
         path = self.path.split("?")[0]  # strip query string
@@ -342,6 +451,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json(data)
 
+        elif path == "/api/apikeys":
+            keys = read_api_keys()
+            self._send_json({"keys": keys})
+
+        elif path.startswith("/api/node/"):
+            if not check_any_auth(self):
+                self._send_auth_challenge()
+                return
+            node_path = path[len("/api/node"):]
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            status, data, ct, err = node_proxy("GET", node_path, qs)
+            if err:
+                data = json.dumps({"error": err}).encode()
+                ct = "application/json"
+                status = 502
+            self._send_proxy_response(status, data, ct)
+
         else:
             self.send_error(404)
 
@@ -386,6 +512,49 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": err}, 502)
             else:
                 self._send_json(data)
+
+        elif path == "/api/apikeys/generate":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(body)
+                name = data.get("name", "").strip()
+            except Exception:
+                self._send_json({"error": "invalid JSON"}, 400)
+                return
+            if not name:
+                self._send_json({"error": "name is required"}, 400)
+                return
+            entry = generate_api_key(name)
+            self._send_json({"ok": True, "key": entry})
+
+        elif path == "/api/apikeys/delete":
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length)
+            try:
+                data = json.loads(body)
+                key = data.get("key", "")
+            except Exception:
+                self._send_json({"error": "invalid JSON"}, 400)
+                return
+            deleted = delete_api_key(key)
+            self._send_json({"ok": deleted})
+
+        elif path.startswith("/api/node/"):
+            if not check_any_auth(self):
+                self._send_auth_challenge()
+                return
+            node_path = path[len("/api/node"):]
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length) if length > 0 else b""
+            content_type = self.headers.get("Content-Type", "application/json")
+            status, data, ct, err = node_proxy("POST", node_path, qs, body, content_type)
+            if err:
+                data = json.dumps({"error": err}).encode()
+                ct = "application/json"
+                status = 502
+            self._send_proxy_response(status, data, ct)
 
         else:
             self.send_error(404)

@@ -335,6 +335,74 @@
     .update-btn:hover   { opacity: 0.85; }
     .update-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+    /* API key management */
+    .apikey-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .apikey-row:last-child { border-bottom: none; }
+    .apikey-info { flex: 1; min-width: 0; }
+    .apikey-name { font-size: 13px; font-weight: 600; color: var(--text); }
+    .apikey-meta { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+    .delete-btn {
+      background: none;
+      border: 1px solid var(--red);
+      border-radius: var(--radius);
+      color: var(--red);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 4px 10px;
+      flex-shrink: 0;
+    }
+    .delete-btn:hover { background: rgba(248,81,73,0.1); }
+
+    .new-key-box {
+      background: #010409;
+      border: 1px solid var(--green);
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-top: 12px;
+      display: none;
+    }
+    .new-key-box p { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .new-key-value {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--green);
+      word-break: break-all;
+      display: block;
+      margin-bottom: 8px;
+    }
+    .new-key-curl {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      word-break: break-all;
+      display: block;
+    }
+
+    .apikey-gen-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+    .apikey-name-input {
+      flex: 1;
+      min-width: 160px;
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 12px;
+      padding: 8px 10px;
+    }
+    .apikey-name-input:focus { outline: none; border-color: var(--accent); }
+
     @media (max-width: 600px) {
       header { padding: 10px 16px; }
       main   { padding: 12px 8px; gap: 12px; }
@@ -443,6 +511,31 @@
       <button class="update-btn" id="update-btn" disabled>Update Now</button>
       <div id="update-status-msg" style="font-size:12px;color:var(--muted);margin-top:8px;display:none"></div>
       <pre id="update-output"></pre>
+    </div>
+
+    <div class="card">
+      <div class="card-title">
+        <span class="dot"></span>
+        API Keys
+      </div>
+      <p class="settings-hint">API keys allow external scripts to access the <code>/api/node/*</code> proxy routes using an <code>X-API-Key</code> header.</p>
+
+      <div id="api-keys-list" style="margin-top:12px">
+        <span style="color:var(--muted);font-size:12px">Loading…</span>
+      </div>
+
+      <div class="apikey-gen-row">
+        <input type="text" id="apikey-name-input" class="apikey-name-input" placeholder="Key name (e.g. my-script)" maxlength="64">
+        <button class="save-btn" id="generate-key-btn" style="margin-top:0">Generate Key</button>
+      </div>
+
+      <div class="new-key-box" id="new-key-box">
+        <p>Copy this key now — it won't be shown again:</p>
+        <code class="new-key-value" id="new-key-value"></code>
+        <code class="new-key-curl" id="new-key-curl"></code>
+      </div>
+
+      <div id="apikeys-feedback" style="border-radius:var(--radius);display:none;font-size:12px;margin-top:10px;padding:8px 12px;"></div>
     </div>
 
     <div class="card">
@@ -648,7 +741,7 @@
         const tab = btn.dataset.tab;
         document.getElementById('tab-overview').style.display = tab === 'overview' ? '' : 'none';
         document.getElementById('tab-settings').style.display = tab === 'settings'  ? '' : 'none';
-        if (tab === 'settings') { loadPeers(); loadAuthStatus(); _refreshUpdateSection(); }
+        if (tab === 'settings') { loadPeers(); loadAuthStatus(); loadApiKeys(); _refreshUpdateSection(); }
       });
     });
 
@@ -864,6 +957,106 @@
         btn.textContent = 'Save Password';
       }
     });
+
+    // ── Settings: API keys ──────────────────────────────────────────────────
+    async function loadApiKeys() {
+      const container = document.getElementById('api-keys-list');
+      try {
+        const data = await fetchJSON('/api/apikeys');
+        const keys = data.keys || [];
+        if (keys.length === 0) {
+          container.innerHTML = '<span style="color:var(--muted);font-size:12px">No API keys yet.</span>';
+          return;
+        }
+        container.innerHTML = '';
+        keys.forEach(k => {
+          const row = document.createElement('div');
+          row.className = 'apikey-row';
+          const preview = k.key.slice(0, 6) + '…' + k.key.slice(-4);
+          row.innerHTML = `
+            <div class="apikey-info">
+              <div class="apikey-name">${escapeHtml(k.name)}</div>
+              <div class="apikey-meta">${escapeHtml(preview)} &nbsp;·&nbsp; created ${escapeHtml(k.created_at || '—')}</div>
+            </div>
+            <button class="delete-btn" data-key="${escapeHtml(k.key)}">Delete</button>
+          `;
+          row.querySelector('.delete-btn').addEventListener('click', () => deleteApiKey(k.key, k.name));
+          container.appendChild(row);
+        });
+      } catch (err) {
+        container.innerHTML = `<span style="color:var(--red);font-size:12px">Failed to load keys: ${err}</span>`;
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function showApikeysFeedback(msg, ok) {
+      const el = document.getElementById('apikeys-feedback');
+      el.textContent = msg;
+      el.style.cssText = `display:block;border-radius:var(--radius);font-size:12px;margin-top:10px;padding:8px 12px;` +
+        (ok
+          ? 'background:rgba(63,185,80,0.1);border:1px solid var(--green);color:var(--green)'
+          : 'background:rgba(248,81,73,0.1);border:1px solid var(--red);color:var(--red)');
+    }
+
+    document.getElementById('generate-key-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('generate-key-btn');
+      const nameInput = document.getElementById('apikey-name-input');
+      const name = nameInput.value.trim();
+      if (!name) { showApikeysFeedback('Please enter a key name.', false); return; }
+      btn.disabled = true;
+      btn.textContent = 'Generating…';
+      document.getElementById('new-key-box').style.display = 'none';
+      document.getElementById('apikeys-feedback').style.display = 'none';
+      try {
+        const resp = await fetch('/api/apikeys/generate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({name}),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          const key = data.key.key;
+          document.getElementById('new-key-value').textContent = key;
+          document.getElementById('new-key-curl').textContent =
+            `curl -H "X-API-Key: ${key}" http://${window.location.host}/api/node/cryptarchia/info`;
+          document.getElementById('new-key-box').style.display = 'block';
+          nameInput.value = '';
+          loadApiKeys();
+        } else {
+          showApikeysFeedback('Error: ' + (data.error || 'unknown'), false);
+        }
+      } catch (err) {
+        showApikeysFeedback('Request failed: ' + err, false);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Generate Key';
+      }
+    });
+
+    async function deleteApiKey(key, name) {
+      if (!confirm(`Delete API key "${name}"?`)) return;
+      document.getElementById('apikeys-feedback').style.display = 'none';
+      try {
+        const resp = await fetch('/api/apikeys/delete', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({key}),
+        });
+        const data = await resp.json();
+        if (data.ok) {
+          loadApiKeys();
+        } else {
+          showApikeysFeedback('Failed to delete key.', false);
+        }
+      } catch (err) {
+        showApikeysFeedback('Request failed: ' + err, false);
+      }
+    }
 
     document.getElementById('save-peers-btn').addEventListener('click', async () => {
       const btn = document.getElementById('save-peers-btn');
