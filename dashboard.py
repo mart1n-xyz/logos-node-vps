@@ -394,6 +394,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_asset(path[len("/assets/"):])
             return
 
+        # Node API proxy — accepts API key OR basic auth (checked independently)
+        if path.startswith("/api/node/"):
+            if not check_any_auth(self):
+                self._send_auth_challenge()
+                return
+            node_path = path[len("/api/node"):]
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            status, data, ct, err = node_proxy("GET", node_path, qs)
+            if err:
+                data = json.dumps({"error": err}).encode()
+                ct = "application/json"
+                status = 502
+            self._send_proxy_response(status, data, ct)
+            return
+
         if not check_auth(self):
             self._send_auth_challenge()
             return
@@ -455,24 +470,29 @@ class DashboardHandler(BaseHTTPRequestHandler):
             keys = read_api_keys()
             self._send_json({"keys": keys})
 
-        elif path.startswith("/api/node/"):
-            if not check_any_auth(self):
-                self._send_auth_challenge()
-                return
-            node_path = path[len("/api/node"):]
-            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
-            status, data, ct, err = node_proxy("GET", node_path, qs)
-            if err:
-                data = json.dumps({"error": err}).encode()
-                ct = "application/json"
-                status = 502
-            self._send_proxy_response(status, data, ct)
-
         else:
             self.send_error(404)
 
     def do_POST(self):
         path = self.path.split("?")[0]
+
+        # Node API proxy — accepts API key OR basic auth (checked independently)
+        if path.startswith("/api/node/"):
+            if not check_any_auth(self):
+                self._send_auth_challenge()
+                return
+            node_path = path[len("/api/node"):]
+            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+            length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(length) if length > 0 else b""
+            content_type = self.headers.get("Content-Type", "application/json")
+            status, data, ct, err = node_proxy("POST", node_path, qs, body, content_type)
+            if err:
+                data = json.dumps({"error": err}).encode()
+                ct = "application/json"
+                status = 502
+            self._send_proxy_response(status, data, ct)
+            return
 
         if not check_auth(self):
             self._send_auth_challenge()
@@ -539,22 +559,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             deleted = delete_api_key(key)
             self._send_json({"ok": deleted})
-
-        elif path.startswith("/api/node/"):
-            if not check_any_auth(self):
-                self._send_auth_challenge()
-                return
-            node_path = path[len("/api/node"):]
-            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
-            length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length) if length > 0 else b""
-            content_type = self.headers.get("Content-Type", "application/json")
-            status, data, ct, err = node_proxy("POST", node_path, qs, body, content_type)
-            if err:
-                data = json.dumps({"error": err}).encode()
-                ct = "application/json"
-                status = 502
-            self._send_proxy_response(status, data, ct)
 
         else:
             self.send_error(404)
