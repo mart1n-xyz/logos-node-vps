@@ -1,8 +1,8 @@
-# Logos Blockchain Node — Railway Dockerfile
+# Logos Blockchain Node — VPS Dockerfile
 # Update NODE_VERSION and CIRCUITS_VERSION when new releases are published.
 
-ARG NODE_VERSION=0.2.1
-ARG CIRCUITS_VERSION=0.4.1
+ARG NODE_VERSION=0.1.2
+ARG CIRCUITS_VERSION=0.4.2
 
 # ── Download stage ────────────────────────────────────────────────────────────
 FROM ubuntu:24.04 AS downloader
@@ -18,10 +18,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /download
 
 # Download node binary tarball
-# Asset naming: logos-blockchain-node-linux-x86_64-v{version}.tar.gz
-# If naming differs, adjust the URL (some releases may omit the `v` prefix).
+# Upstream release source: logos-blockchain/logos-blockchain.
 RUN curl -fsSL \
-    "https://github.com/logos-co/nomos-node/releases/download/${NODE_VERSION}/logos-blockchain-node-linux-x86_64-${NODE_VERSION}.tar.gz" \
+    "https://github.com/logos-blockchain/logos-blockchain/releases/download/${NODE_VERSION}/logos-blockchain-node-linux-x86_64-${NODE_VERSION}.tar.gz" \
     -o node.tar.gz \
     && tar -xzf node.tar.gz \
     && find . -name 'logos-blockchain-node' -type f -exec mv {} /download/logos-blockchain-node \; \
@@ -29,7 +28,7 @@ RUN curl -fsSL \
 
 # Download ZK circuits tarball
 RUN curl -fsSL \
-    "https://github.com/logos-co/nomos-node/releases/download/${NODE_VERSION}/logos-blockchain-circuits-v${CIRCUITS_VERSION}-linux-x86_64.tar.gz" \
+    "https://github.com/logos-blockchain/logos-blockchain/releases/download/${NODE_VERSION}/logos-blockchain-circuits-v${CIRCUITS_VERSION}-linux-x86_64.tar.gz" \
     -o circuits.tar.gz \
     && tar -xzf circuits.tar.gz
 
@@ -58,7 +57,7 @@ COPY --from=downloader /download/logos-blockchain-circuits-v${CIRCUITS_VERSION}-
 ENV LOGOS_BLOCKCHAIN_CIRCUITS=/opt/logos-blockchain/circuits
 
 # Default bootstrap peers — override via BOOTSTRAP_PEERS in .env
-ENV BOOTSTRAP_PEERS="/ip4/65.109.51.37/udp/3000/quic-v1/p2p/12D3KooWL7a8LBbLRYnabptHPFBCmAs49Y7cVMqvzuSdd43tAJk8 /ip4/65.109.51.37/udp/3001/quic-v1/p2p/12D3KooWPLeAcachoUm68NXGD7tmNziZkVeMmeBS5NofyukuMRJh /ip4/65.109.51.37/udp/3002/quic-v1/p2p/12D3KooWKFNe4gS5DcCcRUVGdMjZp3fUWu6q6gG5R846Ui1pccHD /ip4/65.109.51.37/udp/3003/quic-v1/p2p/12D3KooWAnriLgXyQnGTYz1zPWPkQL3rthTKYLzuAP7MMnbgsxzR"
+ENV BOOTSTRAP_PEERS="/ip4/65.109.51.37/udp/3000/quic-v1/p2p/12D3KooWFrouXfmrR4nsLMtE7wu15DoMJ6VtoUtHinREZCvbWHar /ip4/65.109.51.37/udp/3001/quic-v1/p2p/12D3KooWJRGau8M1rjT7R5e4YYsgdFhsMX35nRDtMwCDjxQkXAHz /ip4/65.109.51.37/udp/3002/quic-v1/p2p/12D3KooWQXJavMDTRscjauFSgVAB1VLB6Rzpy2uY5SU9Tk7927tb /ip4/65.109.51.37/udp/3003/quic-v1/p2p/12D3KooWSQc7CcGtvWDPF1yCbBthFnQjprfCVHmfmNDUrSmqQsU1"
 
 # Persistent data directory (mounted as a Railway volume)
 # Volume mount handled by Railway — do not use VOLUME directive

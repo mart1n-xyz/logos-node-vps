@@ -3,8 +3,8 @@ services:
     build:
       context: .
       args:
-        NODE_VERSION: "0.2.1"
-        CIRCUITS_VERSION: "0.4.1"
+        NODE_VERSION: "0.1.2"
+        CIRCUITS_VERSION: "0.4.2"
     volumes:
       - logos-data:/data
     ports:

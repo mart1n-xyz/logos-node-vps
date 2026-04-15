@@ -5,7 +5,7 @@
 # Later runs: skips init and starts directly from the existing config.
 #
 # Environment variables (all optional — see railway.toml for defaults):
-#   BOOTSTRAP_PEERS     Space-separated multiaddrs for the devnet bootstrap peers.
+#   BOOTSTRAP_PEERS     Space-separated multiaddrs for the testnet bootstrap peers.
 #   API_PORT            TCP port for the node's HTTP API (default: 8080).
 #   DATA_DIR            Directory for config + chain state (default: /data).
 #   DASHBOARD_PASSWORD  If set, enables basic auth on the web dashboard.

@@ -2,7 +2,7 @@
 # setup.sh — One-shot installer for Logos Blockchain Node on Ubuntu 24.04 / Debian 12+
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/main/setup.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/mart1n-xyz/logos-node-vps/master/setup.sh | bash
 #   # or, after cloning:
 #   sudo bash setup.sh
 #
@@ -78,6 +78,20 @@ else
 fi
 
 cd "${INSTALL_DIR}"
+
+TARGET_NODE_VERSION=$(sed -n 's/.*NODE_VERSION: "\([^"]*\)".*/\1/p' docker-compose.yml | head -n1)
+PROJECT_NAME=$(basename "${INSTALL_DIR}")
+DATA_VOLUME="${PROJECT_NAME}_logos-data"
+
+if docker volume ls --format '{{.Name}}' | grep -qx "${DATA_VOLUME}"; then
+    if [[ "${TARGET_NODE_VERSION}" == "0.1.2" && "${ALLOW_BREAKING_RESET:-0}" != "1" ]]; then
+        err "Upstream node ${TARGET_NODE_VERSION} requires a destructive state reset. Run 'docker compose -f ${INSTALL_DIR}/docker-compose.yml down -v' first, or re-run with ALLOW_BREAKING_RESET=1."
+    fi
+    if [[ "${TARGET_NODE_VERSION}" == "0.1.2" && "${ALLOW_BREAKING_RESET:-0}" == "1" ]]; then
+        warn "Breaking upgrade approved via ALLOW_BREAKING_RESET=1 — removing ${DATA_VOLUME} before rebuild."
+        docker compose -f "${INSTALL_DIR}/docker-compose.yml" down -v || true
+    fi
+fi
 
 # ── Create .env from example if it doesn't exist ─────────────────────────────
 if [[ ! -f .env ]]; then
