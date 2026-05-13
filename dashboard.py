@@ -194,17 +194,35 @@ def updater_post(path):
 
 
 def restart_node():
-    """Send SIGTERM to the nomos node process. Returns (restarted, note)."""
+    """Send SIGTERM to the node process so Docker (or the wrapper) restarts it.
+
+    The binary was renamed from ``nomos`` to ``logos-blockchain-node`` upstream;
+    we look for either, plus the wrapping entrypoint.sh, so this stays robust
+    across release renames.
+    Returns (restarted, note).
+    """
+    patterns = ["logos-blockchain-node", "nomos", "entrypoint.sh"]
+    pids = set()
     try:
-        result = subprocess.run(
-            ["pgrep", "-f", "nomos"],
-            capture_output=True, text=True
-        )
-        pids = [int(p) for p in result.stdout.split() if p.strip().isdigit()]
+        for pat in patterns:
+            result = subprocess.run(
+                ["pgrep", "-f", pat],
+                capture_output=True, text=True
+            )
+            for tok in result.stdout.split():
+                if tok.strip().isdigit():
+                    pid = int(tok)
+                    # Skip our own pid and direct parents to avoid suicide.
+                    if pid == os.getpid() or pid == os.getppid():
+                        continue
+                    pids.add(pid)
         if not pids:
-            return False, "process not found — peers saved but node not restarted"
+            return False, "node process not found — peers saved but node not restarted"
         for pid in pids:
-            os.kill(pid, signal.SIGTERM)
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
         return True, None
     except Exception as exc:
         return False, str(exc)

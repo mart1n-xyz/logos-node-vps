@@ -85,12 +85,13 @@ docker compose up -d --build
 
 | Variable | Default | Description |
 |---|---|---|
-| `BOOTSTRAP_PEERS` | *(v0.1.2 peers — see below)* | Space-separated multiaddrs to join the network |
-| `API_PORT` | `8080` | Node internal HTTP API port (do not expose publicly) |
+| `BOOTSTRAP_PEERS` | *(v0.1.2 peers — see below)* | Space-separated multiaddrs to join the network. Re-applied to `user_config.yaml` on every start. |
+| `API_PORT` | `8080` | Node internal HTTP API port (do not expose publicly). Re-applied on every start. |
 | `NODE_API_PORT` | `8080` | Same as `API_PORT` — used by `dashboard.py` |
 | `DATA_DIR` | `/data` | Container path for config and chain state |
 | `PORT` | `3001` | Web dashboard port |
 | `DASHBOARD_PASSWORD` | *(empty)* | If set, enables HTTP basic auth (username: `admin`). Can also be set from the dashboard Settings tab without SSH. |
+| `STATE_RESET` | `0` | When `1`, wipe `state/`, `node.log`, and timestamped recovery snapshot dirs at container start. Keys in `user_config.yaml` are preserved. Use this after upstream node upgrades that change the chain-DB format. |
 | `DOMAIN` | *(empty)* | Your domain name — only needed for the optional Caddy HTTPS setup |
 
 All variables live in `.env` (created from `.env.example` during setup).
@@ -247,23 +248,24 @@ These are pre-filled in `.env.example`. Update `BOOTSTRAP_PEERS` in `.env` when 
 
 ## Updating to a new release
 
-1. Update `BOOTSTRAP_PEERS` in `.env` with the peers from the new release notes.
+1. Update `BOOTSTRAP_PEERS` in `.env` with the peers from the new release notes. From `v0.5.0` onward the entrypoint re-applies this on every start, so existing installs pick up the new peers without manual config edits.
 2. Edit `docker-compose.yml` and bump `NODE_VERSION` (and `CIRCUITS_VERSION` if circuits were re-released):
    ```yaml
    args:
      NODE_VERSION: "0.1.2"
      CIRCUITS_VERSION: "0.4.2"
    ```
-3. Rebuild and restart:
+3. If the release notes call out a **breaking** network reset or chain-DB format change, set `STATE_RESET=1` in `.env` for one start to wipe the on-disk chain state. Wallet keys / node identity in `user_config.yaml` are preserved. Remove the flag again after the first successful start.
+4. Rebuild and restart:
    ```bash
    cd /opt/logos-node
    git pull
    docker compose up -d --build
    ```
 
-The current one-click updater in already-deployed `v0.4.1` installs does not automate the `0.1.2` destructive reset. For this specific upgrade, treat it as a manual migration.
+Symptoms that point to a stale chain DB after an upgrade: the wallet service crash-loops with `Failed to apply backfill block to wallet ... Requested wallet state for unknown block`. Set `STATE_RESET=1` for one start and the node will re-sync cleanly.
 
-Chain state in the `logos-data` volume is preserved across rebuilds.
+Chain state in the `logos-data` volume is preserved across rebuilds unless `STATE_RESET=1` is set.
 
 > **Tip**: If `CIRCUITS_VERSION` differs from `NODE_VERSION` in a release, set them independently in `docker-compose.yml` under `build.args`.
 

@@ -2,7 +2,8 @@
 # entrypoint.sh — Logos Blockchain node startup script for Railway
 #
 # First run:  generates keys + user_config.yaml via `init`, then starts node.
-# Later runs: skips init and starts directly from the existing config.
+# Later runs: keeps existing keys but re-applies BOOTSTRAP_PEERS / API_PORT
+#             to user_config.yaml so .env changes propagate without manual edits.
 #
 # Environment variables (all optional — see railway.toml for defaults):
 #   BOOTSTRAP_PEERS     Space-separated multiaddrs for the testnet bootstrap peers.
@@ -10,6 +11,9 @@
 #   DATA_DIR            Directory for config + chain state (default: /data).
 #   DASHBOARD_PASSWORD  If set, enables basic auth on the web dashboard.
 #   NODE_API_PORT       Same as API_PORT — used by dashboard.py (default: 8080).
+#   STATE_RESET         If "1", wipe chain state (state/ + node.log + timestamped
+#                       snapshot dirs) before start. user_config.yaml is preserved.
+#                       Useful after node upgrades that change the on-disk format.
 
 set -euo pipefail
 
@@ -24,6 +28,17 @@ LOG_MAX_BYTES=$((10 * 1024 * 1024))
 # Ensure the data directory exists (volume may not be pre-populated)
 mkdir -p "${DATA_DIR}"
 cd "${DATA_DIR}"
+
+# ── Optional state reset ───────────────────────────────────────────────────────
+# When STATE_RESET=1, wipe chain DB + node log + timestamped recovery snapshots
+# but keep user_config.yaml (so wallet keys / node_key survive).
+if [[ "${STATE_RESET:-0}" == "1" ]]; then
+    echo "[entrypoint] STATE_RESET=1 — wiping chain state. Keys in user_config.yaml are preserved."
+    rm -rf "${DATA_DIR}/state" "${LOG_FILE}"
+    # Date-stamped snapshot dirs ("<unix-ts>.YYYY-MM-DD-HH") can accumulate to
+    # tens of GB; clean them too.
+    find "${DATA_DIR}" -maxdepth 1 -type d -regex '.*/[0-9]+\.[0-9-]+' -print -exec rm -rf {} + || true
+fi
 
 # ── Log rotation ───────────────────────────────────────────────────────────────
 # Truncate the log file on startup if it exceeds 10 MiB to avoid runaway growth.
@@ -66,17 +81,82 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
     logos-blockchain-node init \
         "${PEER_FLAGS[@]+"${PEER_FLAGS[@]}"}"
 
-    # Patch api_port in generated config if non-default
-    if [[ "${API_PORT}" != "8080" ]] && [[ -f "${CONFIG_FILE}" ]]; then
-        sed -i "s/^api_port:.*/api_port: ${API_PORT}/" "${CONFIG_FILE}"
-    fi
-
     echo "[entrypoint] Initialisation complete. Config written to ${CONFIG_FILE}."
     echo "[entrypoint] Node keys:"
     grep -A3 known_keys "${CONFIG_FILE}" || true
 else
-    echo "[entrypoint] Existing config found at ${CONFIG_FILE} — skipping init."
+    echo "[entrypoint] Existing config found at ${CONFIG_FILE} — keeping keys, re-applying settings from environment."
 fi
+
+# ── Re-apply env-driven settings to user_config.yaml ───────────────────────────
+# Runs on every start so changes to BOOTSTRAP_PEERS / API_PORT in .env take effect
+# without requiring a manual reinit. user_config.yaml ships keys + plenty of other
+# tuning knobs; we only touch the two fields that the operator owns via env.
+patch_config() {
+    python3 - "$CONFIG_FILE" <<'PYEOF'
+import os
+import re
+import sys
+
+path = sys.argv[1]
+with open(path) as f:
+    txt = f.read()
+
+original = txt
+changes = []
+
+bootstrap_peers = os.environ.get("BOOTSTRAP_PEERS", "").split()
+if bootstrap_peers:
+    # network.backend.initial_peers — list under 4-space indent
+    initial_peers_block = "".join(f"    - {p}\n" for p in bootstrap_peers)
+    pattern = re.compile(r"(    initial_peers:\n)((?:    - .+\n)*)")
+    m = pattern.search(txt)
+    if m:
+        new = txt[:m.start()] + m.group(1) + initial_peers_block + txt[m.end():]
+        if new != txt:
+            txt = new
+            changes.append(f"initial_peers ({len(bootstrap_peers)} peers)")
+    else:
+        print("[patch_config] WARN: initial_peers block not found")
+
+    # cryptarchia.network.bootstrap.ibd.peers — list of bare peer IDs, 8-space indent
+    ibd_peers = []
+    for ma in bootstrap_peers:
+        # extract /p2p/<peer_id>
+        m2 = re.search(r"/p2p/(\S+)$", ma)
+        if m2:
+            ibd_peers.append(m2.group(1))
+    if ibd_peers:
+        ibd_block = "".join(f"        - {p}\n" for p in ibd_peers)
+        pattern2 = re.compile(r"(        peers:\n)((?:        - \S+\n)+)")
+        m3 = pattern2.search(txt)
+        if m3:
+            new = txt[:m3.start()] + m3.group(1) + ibd_block + txt[m3.end():]
+            if new != txt:
+                txt = new
+                changes.append(f"ibd.peers ({len(ibd_peers)} peers)")
+        else:
+            print("[patch_config] WARN: cryptarchia ibd peers block not found")
+
+api_port = os.environ.get("API_PORT", "").strip()
+if api_port:
+    # Top-level api.backend.listen_address: 0.0.0.0:<port>
+    pattern3 = re.compile(r"(listen_address: 0\.0\.0\.0:)\d+")
+    new = pattern3.sub(rf"\g<1>{api_port}", txt)
+    if new != txt:
+        txt = new
+        changes.append(f"api listen_address (:{api_port})")
+
+if txt != original:
+    with open(path, "w") as f:
+        f.write(txt)
+    print("[patch_config] Updated:", ", ".join(changes))
+else:
+    print("[patch_config] No changes needed.")
+PYEOF
+}
+
+patch_config || echo "[entrypoint] WARN: patch_config failed — continuing with existing config."
 
 # ── Start the dashboard ────────────────────────────────────────────────────────
 DASHBOARD_PY="$(dirname "$(readlink -f "$0")")/dashboard.py"
